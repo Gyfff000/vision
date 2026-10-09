@@ -8,8 +8,8 @@ import sys
 # 1. Run SAMPLE with a known color filling the small center square.
 # 2. Paste one printed THRESHOLDS[id] assignment below the dictionary.
 # 3. Set MODE to DETECT and run again. Start with just one color.
-MODE = "DETECT"                 # "SAMPLE" or "DETECT"
-SAMPLE_COLOR_ID = 1              # 1 red, 2 yellow, 3 blue, 4 green, 5 black, 6 light blue
+MODE = "SAMPLE"                 # "SAMPLE" or "DETECT"
+SAMPLE_COLOR_ID = 2              # 1 red, 2 yellow, 3 blue, 4 green, 5 black, 6 light blue
 THRESHOLDS = {
     1: None, 2: None, 3: None, 4: None, 5: None, 6: None,
 }
