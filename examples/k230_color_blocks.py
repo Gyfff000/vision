@@ -8,13 +8,15 @@ import sys
 # 1. Run SAMPLE with a known color filling the small center square.
 # 2. Paste one printed THRESHOLDS[id] assignment below the dictionary.
 # 3. Set MODE to DETECT and run again. Start with just one color.
-MODE = "SAMPLE"                 # "SAMPLE" or "DETECT"
+MODE = "DETECT"                 # "SAMPLE" or "DETECT"
 SAMPLE_COLOR_ID = 1              # 1 red, 2 yellow, 3 blue, 4 green, 5 black, 6 light blue
 THRESHOLDS = {
     1: None, 2: None, 3: None, 4: None, 5: None, 6: None,
 }
 # Paste sampled assignments HERE, for example: THRESHOLDS[1] = (six numbers)
 # None disables a color. No universal thresholds are assumed.
+# User's second red sample (2026-10-09); candidate pending detection validation.
+THRESHOLDS[1] = (46, 57, 38, 71, 24, 60)
 
 WIDTH = 640
 HEIGHT = 480
