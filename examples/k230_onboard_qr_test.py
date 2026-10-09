@@ -1,5 +1,5 @@
 # Run this file in CanMV IDE on the K230, not desktop Python.
-# Initial validation only: onboard camera -> QR decode -> IDE terminal.
+# Initial validation: onboard camera -> QR decode -> LCD + IDE preview/terminal.
 # Camera setup follows the CanMV QR example and Yahboom Sensor() examples.
 import time
 import os
@@ -43,8 +43,8 @@ def main():
         sensor.set_hmirror(False)
         sensor.set_vflip(False)
 
-        # IDE preview only; avoids assuming a particular LCD model.
-        Display.init(Display.VIRT, width=WIDTH, height=HEIGHT, to_ide=True)
+        # Yahboom K230 LCD configuration; mirror the same image to the IDE.
+        Display.init(Display.ST7701, width=WIDTH, height=HEIGHT, to_ide=True)
         display_ready = True
         MediaManager.init()
         media_ready = True

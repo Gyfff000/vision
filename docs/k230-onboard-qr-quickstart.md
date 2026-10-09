@@ -26,7 +26,15 @@
 
 在电脑上用CanMV IDE打开 [扫码测试程序](../examples/k230_onboard_qr_test.py)，或者新建脚本并粘贴全部内容；点击左下角绿色运行按钮。代码发送到K230执行，不是在电脑Python中运行。
 
-默认使用自带相机、640×480灰度图和IDE虚拟显示。模块自带实体屏幕可能不会显示该测试画面；请看IDE帧缓冲区。无需额外模型文件，也无需联网推理。
+默认使用自带相机和640×480灰度图，按亚博屏幕例程采用ST7701显示配置，同时输出到K230实体屏幕和电脑IDE预览。两个位置显示同一幅带二维码检测框的画面；解码字符串与任务确认信息仍在终端查看。无需额外模型文件，也无需联网推理。
+
+关键配置如下，使用CanMV IDE或VS Code的CanMV扩展均适用：
+
+```python
+Display.init(Display.ST7701, width=WIDTH, height=HEIGHT, to_ide=True)
+```
+
+`Display.ST7701`启用模块屏幕，`to_ide=True`同时保留电脑图像预览。停止旧脚本后重新运行最新版；不需要另开第二路摄像头或重复调用Display.init。若实物屏幕不是亚博配套型号，以该屏配套的显示驱动及分辨率为准。
 
 若暂时只想检查画面，将顶部 `DECODE_ENABLED = True` 改成 `False`；看到清晰画面后再改回 `True`。
 
@@ -66,7 +74,8 @@
 | IDE连不上 | 数据线、USB口、TF卡、设备管理器及配套IDE |
 | 提示找不到 `media.sensor` | 确认是在CanMV IDE连接的K230上运行，记录固件版本和完整报错 |
 | Sensor初始化报错 | 先跑亚博当前固件配套的摄像头显示例程；对照其Sensor参数，不猜摄像头编号 |
-| Display.VIRT不支持或图像显示报错 | 记录完整错误；以本板配套例程的显示配置为准，不随意替换其它板的LCD型号 |
+| 电脑有画面但实体屏幕无画面 | 确认正在运行最新版且使用Display.ST7701；先运行亚博配套的摄像头显示例程，核对屏幕驱动及分辨率 |
+| ST7701初始化或图像显示报错 | 保留完整错误；按实物屏幕的配套例程核对配置，不猜测其它型号的屏幕驱动 |
 | 有画面但不出码 | 确认DECODE_ENABLED为True；完整白边、清晰度、大小、光照；先正对静止测试 |
 | 图像似乎镜像 | 默认关闭hmirror/vflip，先保持该配置；需要调整时一次只改一项并重测 |
 | 有QR但TASK_VALID为False | 检查是否扫到了网址、全角加号、空格或不合法数字；使用本仓库测试码 |
@@ -88,3 +97,5 @@
 - [亚博安装编程环境](https://admin.yahboom.com/build.html?cid=705&id=13233)
 - [亚博调试运行例程](https://admin.yahboom.com/build.html?cid=705&id=13234)
 - [嘉楠二维码官方例程](https://www.kendryte.com/k230_canmv/zh/v1.6/example/omv/qrcodes.html)：`find_qrcodes()`及灰度图识别接口。
+
+- [亚博摄像头显示例程](https://www.yahboom.net/public/upload/upload-html/1747304148/17.Camera%20display.html)：ST7701、640×480及to_ide=True配置。
