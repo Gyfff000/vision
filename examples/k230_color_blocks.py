@@ -8,16 +8,21 @@ import sys
 # 1. Run SAMPLE with a known color filling the small center square.
 # 2. Paste one printed THRESHOLDS[id] assignment below the dictionary.
 # 3. Set MODE to DETECT and run again. Start with just one color.
-MODE = "SAMPLE"                 # "SAMPLE" or "DETECT"
-SAMPLE_COLOR_ID = 2              # 1 red, 2 yellow, 3 blue, 4 green, 5 black, 6 light blue
+MODE = "DETECT"                 # "SAMPLE" or "DETECT"
+SAMPLE_COLOR_ID = 6              # Only used in SAMPLE mode; 1..6 as listed below
 THRESHOLDS = {
     1: None, 2: None, 3: None, 4: None, 5: None, 6: None,
 }
 # Paste sampled assignments HERE, for example: THRESHOLDS[1] = (six numbers)
 # None disables a color. No universal thresholds are assumed.
-# Envelope of the user's four new red samples (2026-10-09).
-# Candidate pending detection validation; no additional padding applied.
+# Six sampled candidates from the user's IDE screenshot (2026-10-09).
+# Sampling completed; simultaneous detection and real blocks still need validation.
 THRESHOLDS[1] = (53, 67, 52, 78, 17, 51)
+THRESHOLDS[2] = (92, 100, -25, 2, 23, 72)
+THRESHOLDS[3] = (46, 61, 5, 32, -82, -58)
+THRESHOLDS[4] = (66, 80, -66, -30, 14, 56)
+THRESHOLDS[5] = (13, 63, -13, 16, -20, 6)
+THRESHOLDS[6] = (89, 100, -38, 8, -15, 9)
 
 WIDTH = 640
 HEIGHT = 480
