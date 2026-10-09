@@ -8,8 +8,9 @@ import sys
 # 1. Run SAMPLE with a known color filling the small center square.
 # 2. Paste one printed THRESHOLDS[id] assignment below the dictionary.
 # 3. Set MODE to DETECT and run again. Start with just one color.
-MODE = "DETECT"                 # "SAMPLE" or "DETECT"
+MODE = "TUNE"                   # "SAMPLE", "DETECT", or "TUNE"
 SAMPLE_COLOR_ID = 6              # Only used in SAMPLE mode; 1..6 as listed below
+TUNE_COLOR_ID = 1                # Diagnose one known color first: 1 = RED
 THRESHOLDS = {
     1: None, 2: None, 3: None, 4: None, 5: None, 6: None,
 }
@@ -34,6 +35,7 @@ MAX_AREA_FRACTION = 0.50         # Reject very large background regions
 OVERLAP_FRACTION = 0.40         # Shared bounding-box area / smaller box area
 PRINT_INTERVAL_MS = 250
 SAMPLE_INTERVAL_MS = 1000
+TUNE_INTERVAL_MS = 1000
 LAB_PADDING = (5, 8, 8)
 COLOR_NAMES = {1: "RED", 2: "YELLOW", 3: "BLUE", 4: "GREEN",
                5: "BLACK", 6: "LIGHT_BLUE"}
@@ -84,27 +86,56 @@ def box_overlap(first, second):
     return shared_w * shared_h / max(1, min(w1 * h1, w2 * h2))
 
 
-def detect_blocks(img, ids, values):
+def threshold_misses(lab, threshold):
+    """Report which channels exclude the center patch's median LAB value."""
+    return [name for i, name in enumerate(("L", "A", "B"))
+            if not threshold[2 * i] <= lab[i] <= threshold[2 * i + 1]]
+
+
+def detect_blocks(img, ids, values, diagnostics=None):
     """Detect before drawing; overlapping different labels are ambiguous."""
+    if diagnostics is not None:
+        diagnostics.clear()
+        diagnostics.update({"raw": 0, "small_pixels": 0, "small_area": 0,
+                            "large_area": 0, "unknown_code": 0, "kept": 0})
     if not values:
         return []
+    # TUNE searches down to 30 pixels/area to count smaller candidates;
+    # final acceptance still uses MIN_PIXELS and MIN_AREA, as in DETECT.
+    pixel_floor = MIN_PIXELS if diagnostics is None else min(MIN_PIXELS, 30)
+    area_floor = MIN_AREA if diagnostics is None else min(MIN_AREA, 30)
     blobs = img.find_blobs(values, roi=DETECT_ROI, x_stride=2, y_stride=1,
-                           pixels_threshold=MIN_PIXELS, area_threshold=MIN_AREA,
+                           pixels_threshold=pixel_floor, area_threshold=area_floor,
                            merge=False)
+    if diagnostics is not None:
+        diagnostics["raw"] = len(blobs)
     records = []
     max_area = DETECT_ROI[2] * DETECT_ROI[3] * MAX_AREA_FRACTION
     for blob in blobs:
         rect = blob.rect()
         area = rect[2] * rect[3]
-        if blob.pixels() < MIN_PIXELS or area < MIN_AREA or area > max_area:
+        reason = None
+        if blob.pixels() < MIN_PIXELS:
+            reason = "small_pixels"
+        elif area < MIN_AREA:
+            reason = "small_area"
+        elif area > max_area:
+            reason = "large_area"
+        if reason is not None:
+            if diagnostics is not None:
+                diagnostics[reason] += 1
             continue
         matches = [ids[i] for i in range(len(ids)) if blob.code() & (1 << i)]
         if not matches:
+            if diagnostics is not None:
+                diagnostics["unknown_code"] += 1
             continue
         color_id = matches[0] if len(matches) == 1 else 0
         records.append({"id": color_id, "rect": rect, "cx": blob.cx(),
                         "cy": blob.cy(), "pixels": blob.pixels(),
                         "valid": color_id != 0})
+    if diagnostics is not None:
+        diagnostics["kept"] = len(records)
     for i in range(len(records)):
         for j in range(i + 1, len(records)):
             first, second = records[i], records[j]
@@ -123,16 +154,23 @@ def main():
     display_ready = False
     media_ready = False
     try:
-        if MODE not in ("SAMPLE", "DETECT"):
-            raise ValueError("MODE must be SAMPLE or DETECT")
+        if MODE not in ("SAMPLE", "DETECT", "TUNE"):
+            raise ValueError("MODE must be SAMPLE, DETECT or TUNE")
         if SAMPLE_COLOR_ID not in COLOR_NAMES:
             raise ValueError("SAMPLE_COLOR_ID must be 1..6")
         ids, values = enabled_colors(THRESHOLDS)
-        if MODE == "DETECT" and not values:
+        if MODE == "TUNE":
+            if TUNE_COLOR_ID not in COLOR_NAMES:
+                raise ValueError("TUNE_COLOR_ID must be 1..6")
+            ids, values = enabled_colors({TUNE_COLOR_ID: THRESHOLDS.get(TUNE_COLOR_ID)})
+        if MODE in ("DETECT", "TUNE") and not values:
             raise ValueError("Sample one color first; paste THRESHOLDS[id] below the dictionary")
         print("[START] color blocks; mode=", MODE, "enabled_ids=", ids)
         print("[BOARD]", os.uname())
         print("[COORDS] pixels: origin top-left, x right, y down; not robot coordinates")
+        if MODE == "TUNE":
+            print("[TUNE_HELP] Fill center square with known", COLOR_NAMES[TUNE_COLOR_ID])
+            print("[TUNE_HELP] Candidate is NOT applied automatically; keep camera/scene/brightness fixed")
         sensor = Sensor()
         sensor.reset()
         sensor.set_framesize(width=WIDTH, height=HEIGHT)
@@ -144,8 +182,9 @@ def main():
         MediaManager.init()
         media_ready = True
         sensor.run()
-        time.sleep_ms(1500)
+        time.sleep_ms(3000)
         last_print = time.ticks_ms()
+        last_tune = last_print
         sample = None
         while True:
             os.exitpoint()
@@ -166,7 +205,22 @@ def main():
                 img.draw_string_advanced(0, 30, 20, "Fill center square with known color",
                                          color=(255, 255, 255))
             else:
-                records = detect_blocks(img, ids, values)
+                diagnostics = {} if MODE == "TUNE" else None
+                records = detect_blocks(img, ids, values, diagnostics)
+                if MODE == "TUNE" and time.ticks_diff(now, last_tune) >= TUNE_INTERVAL_MS:
+                    histogram = img.get_histogram(roi=SAMPLE_ROI)
+                    median = histogram.get_percentile(0.50)
+                    lab = (median.l_value(), median.a_value(), median.b_value())
+                    misses = threshold_misses(lab, values[0])
+                    candidate = sampled_threshold(histogram)
+                    print("[TUNE] id=%d lab_mid=%s outside=%s" %
+                          (TUNE_COLOR_ID, lab, ",".join(misses) if misses else "NONE"))
+                    print("[FILTER] raw=%d small_pixels=%d small_area=%d large_area=%d unknown_code=%d kept=%d" %
+                          (diagnostics["raw"], diagnostics["small_pixels"],
+                           diagnostics["small_area"], diagnostics["large_area"],
+                           diagnostics["unknown_code"], diagnostics["kept"]))
+                    print("[CANDIDATE] THRESHOLDS[%d] = %s" % (TUNE_COLOR_ID, candidate))
+                    last_tune = now
                 if time.ticks_diff(now, last_print) >= PRINT_INTERVAL_MS:
                     if not records:
                         print("[NO_TARGET] count=0")
@@ -184,7 +238,11 @@ def main():
                     img.draw_cross(record["cx"], record["cy"], color=color, thickness=2)
                     img.draw_string_advanced(record["rect"][0], max(60, record["rect"][1] - 22),
                                              20, label, color=color)
-                img.draw_string_advanced(0, 0, 24, "DETECT count=%d" % len(records),
+                header = "DETECT count=%d" % len(records)
+                if MODE == "TUNE":
+                    img.draw_rectangle(SAMPLE_ROI, color=(255, 255, 255), thickness=2)
+                    header = "TUNE %d %s count=%d" % (TUNE_COLOR_ID, COLOR_NAMES[TUNE_COLOR_ID], len(records))
+                img.draw_string_advanced(0, 0, 24, header,
                                          color=(255, 255, 255))
             Display.show_image(img)
             gc.collect()

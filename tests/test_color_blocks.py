@@ -72,6 +72,39 @@ class ColorTests(unittest.TestCase):
         self.assertEqual(blocks.detect_blocks(img, [], []), [])
         self.assertEqual(img.calls, 0)
 
+    def test_diagnostic_search_counts_filters_without_accepting_noise(self):
+        img = Image([Blob((80, 90, 30, 30), 1, pixels=80),
+                     Blob((80, 90, 10, 15), 1, pixels=150),
+                     Blob((20, 60, 600, 400), 1, pixels=200000),
+                     Blob((80, 90, 30, 30), 0), Blob((250, 90, 30, 30), 2)])
+        diagnostics = {"stale": 99}
+        records = blocks.detect_blocks(img, self.ids, self.values, diagnostics)
+        self.assertEqual(diagnostics, {"raw": 5, "small_pixels": 1, "small_area": 1,
+                                       "large_area": 1, "unknown_code": 1, "kept": 1})
+        self.assertEqual([r["id"] for r in records], [6])
+        self.assertEqual(img.kwargs["pixels_threshold"], 30)
+        self.assertEqual(img.kwargs["area_threshold"], 30)
+
+    def test_diagnostic_counts_reset_when_target_disappears(self):
+        img = Image([Blob((80, 90, 30, 30), 1)])
+        diagnostics = {}
+        blocks.detect_blocks(img, self.ids, self.values, diagnostics)
+        self.assertEqual(diagnostics["kept"], 1)
+        img.blobs = []
+        self.assertEqual(blocks.detect_blocks(img, self.ids, self.values, diagnostics), [])
+        self.assertTrue(all(value == 0 for value in diagnostics.values()))
+
+    def test_patch_diagnostic_identifies_excluded_channel(self):
+        red = (53, 67, 52, 78, 17, 51)
+        self.assertEqual(blocks.threshold_misses((45, 65, 35), red), ["L"])
+        self.assertEqual(blocks.threshold_misses((60, 0, 35), red), ["A"])
+        self.assertEqual(blocks.threshold_misses((60, 65, 0), red), ["B"])
+
+    def test_patch_diagnostic_treats_threshold_boundaries_as_inclusive(self):
+        red = (53, 67, 52, 78, 17, 51)
+        self.assertEqual(blocks.threshold_misses((53, 78, 17), red), [])
+        self.assertEqual(blocks.threshold_misses((67, 52, 51), red), [])
+
     def test_invalid_thresholds_fail_explicitly(self):
         for value in ((80, 20, -30, 30, -30, 30), (0, 101, 0, 1, 0, 1),
                       (0, 100, -129, 1, 0, 1), (0, 100, 0, 1, 0),
