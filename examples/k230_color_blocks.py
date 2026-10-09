@@ -15,8 +15,9 @@ THRESHOLDS = {
 }
 # Paste sampled assignments HERE, for example: THRESHOLDS[1] = (six numbers)
 # None disables a color. No universal thresholds are assumed.
-# User's second red sample (2026-10-09); candidate pending detection validation.
-THRESHOLDS[1] = (46, 57, 38, 71, 24, 60)
+# Envelope of the user's four new red samples (2026-10-09).
+# Candidate pending detection validation; no additional padding applied.
+THRESHOLDS[1] = (53, 67, 52, 78, 17, 51)
 
 WIDTH = 640
 HEIGHT = 480
