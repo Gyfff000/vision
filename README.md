@@ -4,7 +4,13 @@
 
 已确认分工：K230自带摄像头负责物块识别及抓放定位；独立USB摄像头负责采集二维码图像；两路图像均由K230处理，二维码解码也在K230上完成。
 
-当前阶段：自带摄像头基础扫码已获用户反馈通过，六色测试参数已保存。用户反馈黑色效果稍好、其他颜色检测差；程序现默认TUNE模式，先只诊断红色的颜色范围与大小过滤，尚未通过联合检测验收。用户暂未取得独立USB摄像头和比赛物块。更新日期：2026-10-09（北京时间）。
+当前阶段：已研究银奖项目并建立K230移植工程，板端六色HSV/形态学自检通过，用户自带相机COLOR初版实测约3fps，但误检和稳定性尚未达标。配套STM32 V1通信C代码、标定工具和自启动安装器已提供；实际串口、USB相机与断电自启动待验收。更新日期：2026-10-11（北京时间）。
+
+## 先测试银奖移植版，再测主控
+
+从[开始使用](开始使用.md)按顺序运行：`examples/k230_gx_self_test.py` → **`examples/k230_silver_rgb.py`**（银奖红绿蓝参数）→ 配套STM32串口PING/COLOR。六色扩展为 `examples/k230_gx_vision.py`，单红诊断为 `examples/k230_red_check.py`。自启动需要在板端执行 `examples/k230_install_autostart.py`，看到INSTALL_OK再断电验证，IDE运行不等于已经安装。
+
+本地交付文件均保存到 `D:\K230_pro`，另有可直接转交同学的ZIP包。源项目视觉代码在本地包的 `reference/` 供对照；仓库保留[原项目链接](https://github.com/liaojingwu20041031/GX-Intelligent-Logistics-Silver)。移植差异、当前限制见[移植记录](docs/gx-k230-port.md)，主控接入见[STM32协议](docs/stm32-vision-protocol.md)。UART默认关闭，待选定实际串口和引脚后启用。
 
 ## 项目文档
 
@@ -27,7 +33,7 @@
 
 优先跑通初赛的二维码、颜色、几何定位；决赛形状识别和装配需求按现场命题扩展。
 
-## 当前正在做：颜色与中心检测
+## 历史 LAB 诊断入口
 
 六色参数已保留在 [k230_color_blocks.py](examples/k230_color_blocks.py)，当前为 `TUNE` 模式、`TUNE_COLOR_ID = 1`，只诊断红色。按用户约定，本地运行文件为 `D:\K230_pro\k230_color_blocks.py`。让纯红色填满中央小框，收集连续三组TUNE、FILTER、CANDIDATE输出，确认颜色范围超界还是大小过滤后再调整。详见[操作指南](docs/k230-color-blocks-quickstart.md)。诊断完成后切回 `DETECT` 验证六色混放、移动及目标消失。没有实物时可打开[六色测试图](assets/color/six-color-test-card.svg)验证流程，实物到位后重新采样。当前输出是像素坐标，机械坐标标定和转盘稳定判断尚未实现。
 
