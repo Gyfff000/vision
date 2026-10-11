@@ -1,7 +1,14 @@
 """Build an IDE-run installer embedding the tested K230 RGB application."""
 from pathlib import Path
+import argparse
 root=Path(__file__).resolve().parents[1]
-payload=(root/"examples/k230_silver_rgb.py").read_text(encoding="utf-8")
+parser=argparse.ArgumentParser(description=__doc__)
+parser.add_argument("--source", type=Path, default=root/"examples/k230_silver_rgb.py",
+                    help="Configured application to embed, including UART settings")
+parser.add_argument("--output", type=Path, default=root/"examples/k230_install_autostart.py")
+args=parser.parse_args()
+payload=args.source.read_text(encoding="utf-8-sig")
+compile(payload, str(args.source), "exec")
 launcher='''# K230 vision autostart. Original startup is in /sdcard/vision_backup/.
 import sys
 import time
@@ -72,6 +79,6 @@ if __name__ == "__main__":
         raise RuntimeError("Run installer on K230 using CanMV IDE, not PC Python")
     install()
 ''' % (repr(payload),repr(launcher))
-output=root/"examples/k230_install_autostart.py"
+output=args.output
 output.write_text(installer,encoding="utf-8")
 print(output)
