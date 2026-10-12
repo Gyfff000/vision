@@ -1,13 +1,13 @@
 # K230 智能搬运比赛视觉工程
 
-版本：FLOW_20261012_V1。基于你提供的 K230_vision_20261011(1).zip 整理，面向2027初赛完整流程；不再需要手动修改MODE从扫码切到颜色。
+版本：FLOW_20261012_V2。基于你提供的 K230_vision_20261011(1).zip 整理，面向2027初赛完整流程；不再需要手动修改MODE从扫码切到颜色。
 
 ## 先安装，再测试
 
-1. 将新包完整解压到电脑本地，例如 `D:\K230_pro\K230_competition_20261012`。不要在Windows左侧的CanMV便携设备目录中编辑代码。
+1. 将新包完整解压到电脑本地，例如 `D:\K230_pro\K230_competition_20261012_v2`。不要在Windows左侧的CanMV便携设备目录中编辑代码。
 2. 在CanMV IDE打开**本地的 `install.py`**，连接K230，停止旧程序，运行一次。
 3. 应看到 `[INSTALL_OK] /sdcard/vision_releases/flow_001`（编号可能更大）和 `[INSTALL_OK] /sdcard/main.py`。它们都出现才算安装完成。
-4. 断开IDE，断电重新供电。约3秒启动延时后，LCD先显示SCAN和实时扫码画面。启动输出必须有 `[FLOW_BUILD] FLOW_20261012_V1`，以及 `[FLOW_SOURCE]` 指出的实际目录。
+4. 断开IDE，断电重新供电。约3秒启动延时后，LCD先显示SCAN和实时扫码画面。启动输出必须有 `[FLOW_BUILD] FLOW_20261012_V2`，以及 `[FLOW_SOURCE]` 指出的实际目录。
 5. 首次测试可在IDE运行 `self_test.py`，应打印一行 `[FLOW_SELF_TEST] ... PASS`。该自检使用合成图像，不证明真实物料准确率。
 
 如果出厂GUI仍在运行，可依亚博官方说明按住KEY再上电，保持到IDE连接后松开，以临时跳过GUI后安装；正常自启动时不要一直按KEY。不刷固件、不删除boot.py或ybUtils。
@@ -16,15 +16,15 @@
 
 ```text
 上电SCAN → 自带摄像头扫码 → 三次有效解码一致
-→ WAIT_ACK：保存任务、显示任务并定时向STM32重发
-→ STM32校验并TASK_ACK → 自动进入第一批原料COLOR
+→ WAIT_ACK：立即切换第一批原料COLOR实时识别，同时定时向STM32重发任务
+→ STM32校验并TASK_ACK → RUN：允许主控请求定位和确认步骤
 → 主控依次完成24个抓放步骤并逐步确认
 → RETURN_HOME → 主控确认回到启停区 → COMPLETE
 ```
 
 用 `assets/task-156-123-516-231.png` 测试。`Good`只是旧版扫码调试内容，不是有效比赛任务，本版本不会凭它启动搬运。物料还没准备好时可以先验证扫码、任务通信和空目标返回。
 
-**没有STM32确认时停在WAIT_ACK是正常行为。** 不会靠延时假定任务已经送达。可用3.3V USB-TTL适配器和 `tools/serial_test.py COM号 --demo` 模拟确认；此工具只确认任务并读取第一步位置，不确认任何抓放动作。它使用外部UART，不能用IDE的USB COM代替。
+**不接STM32也会立即显示颜色识别画面。** 此时状态为WAIT_ACK，识别第一步目标，显示识别框和中心；仍持续重发任务。主控确认前不接受串口定位或STEP，不会靠延时假定任务已经送达。例156+123+516+231先找红色，主控完成红色后才切黑色，再切浅蓝色。可用3.3V USB-TTL适配器和 `tools/serial_test.py COM号 --demo` 模拟确认；此工具只确认任务并读取第一步位置，不确认任何抓放动作。它使用外部UART，不能用IDE的USB COM代替。
 
 同一台摄像头只能看到它实际朝向的区域。扫码时需要看到二维码板；后续需由停车/相机机构使其看到转盘和工位。软件模式切换不能改变镜头朝向。
 
@@ -71,7 +71,7 @@ python tools/build_install.py
 - 降低终端打印频率，GC由每帧改为定时。打印 `[FLOW_PERF]` 分别报告显示FPS、检测FPS和各环节耗时。
 - 真实帧率尚未在你板上测量，不承诺30FPS。缩小图像会损失小目标细节；需要精细对准可调回 `PROCESS_SCALE=0.5` 并重新验证MIN_PIXELS。
 
-WAIT_ACK、PAUSED、RETURN_HOME、COMPLETE显示静态任务状态，不持续占用摄像头；此时FPS为0不是识别性能故障。
+WAIT_ACK保持第一步颜色实时识别。PAUSED、RETURN_HOME、COMPLETE显示静态任务状态，不持续占用摄像头；此时FPS为0不是识别性能故障。
 
 ## 当前必须完成的现场配置
 

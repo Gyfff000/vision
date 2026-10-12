@@ -154,8 +154,6 @@ def main():
                     frame.draw_string_advanced(8,55,32,work.state,color=(255,255,255))
                     frame.draw_string_advanced(8,110,32,work.raw or "WAIT TASK",color=(255,255,0))
                     frame.draw_string_advanced(8,170,24,"GRAB %d  PLACE %d" % (work.grabs,work.places),color=(255,255,255))
-                    if work.state == "WAIT_ACK":
-                        frame.draw_string_advanced(8,210,20,"STM32 must acknowledge task",color=(255,255,255))
                     Display.show_image(frame)
                     idle_key = key
                 time.sleep_ms(10)
@@ -197,6 +195,8 @@ def main():
                         frame.draw_rectangle(code.rect(),color=(0,255,0),thickness=2)
                     current = work.current()
                     title = ("%s S%d C%d P%d" % (current["phase"],work.step,current["color"],current["slot"])) if current else work.state
+                    if work.state == "WAIT_ACK":
+                        title = "COLOR WAIT_ACK C%d" % current["color"]
                     frame.draw_string_advanced(0,0,22,title,color=(255,255,255))
                     frame.draw_string_advanced(0,26,20,"FPS %.1f DET %.1f %s" % (fps,detect_fps,cfg.BUILD_ID),color=(255,255,0))
                     if work.raw:
@@ -234,7 +234,7 @@ def main():
                 fps,detect_fps = frames*1000/elapsed,detections*1000/elapsed
                 print("[FLOW_PERF] state=%s display_fps=%.1f detect_fps=%.1f capture_ms=%d detect_ms=%d draw_ms=%d" %
                       (work.state,fps,detect_fps,capture_ms,detect_ms,display_ms))
-                if work.state == "RUN":
+                if work.state in ("WAIT_ACK", "RUN"):
                     age=time.ticks_diff(stamp,last_detect)
                     for r in records if age <= cfg.MAX_RESULT_AGE_MS else ():
                         print("[FLOW_TARGET] id=%d cx=%d cy=%d valid=%d stable=%d age_ms=%d" %

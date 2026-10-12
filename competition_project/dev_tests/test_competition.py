@@ -40,9 +40,13 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual((w.grabs,w.places),(12,12))
         w.complete_home(w.token);self.assertEqual(w.state,"COMPLETE")
 
-    def test_no_color_before_ack_and_stale_task_after_reset(self):
+    def test_color_preview_before_ack_but_commands_blocked_and_stale_task_rejected(self):
         w=ready(); packets,locate=app.command(w,1,"COLOR",[],1)
+        self.assertEqual(w.mode(),"COLOR")
+        self.assertEqual(w.current()["color"],1)
         self.assertFalse(locate); self.assertIn(b"NOT_RUNNING",packets[0])
+        self.assertIn(b"STEP_MISMATCH",app.command(w,1,"STEP",[str(w.token),"0"],1)[0][0])
+        self.assertEqual(w.step,0)
         self.assertIn(b"BAD_ARGS",app.command(w,1,"TASK_ACK",["abc*"],1)[0][0])
         token=w.token; w.reset()
         for _ in range(3):w.observe(TASK,core.crc16)

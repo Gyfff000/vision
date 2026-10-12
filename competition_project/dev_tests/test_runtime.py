@@ -9,6 +9,12 @@ import vision_core as core
 
 class RuntimeTests(unittest.TestCase):
     def test_board_loop_scan_ack_then_fresh_color_with_display_enabled(self):
+        self.run_board_loop(ack_after=1300)
+
+    def test_board_loop_color_preview_and_task_retries_without_stm32(self):
+        self.run_board_loop(ack_after=None)
+
+    def run_board_loop(self,ack_after):
         task='156+123+516+231'
         class Clock:
             now=0
@@ -38,13 +44,18 @@ class RuntimeTests(unittest.TestCase):
             token=None
             acked=False
             located=False
+            rejected=False
+            events=[]
             def poll(self):
-                if self.token is not None and not self.acked:
+                if self.token is not None and not self.rejected:
+                    self.rejected=True;return [(10,'LOCATE',[])]
+                if self.token is not None and not self.acked and ack_after is not None and Clock.now>=ack_after:
                     self.acked=True;return [(11,'TASK_ACK',[str(self.token)])]
                 if self.acked and not self.located:
                     self.located=True;return [(12,'LOCATE',[])]
                 return []
             def send(self,seq,kind,*args):
+                self.events.append((Clock.now,kind))
                 if kind=='TASK':self.token=args[0]
             def close(self):pass
         class Display:
@@ -67,9 +78,9 @@ class RuntimeTests(unittest.TestCase):
         calls=[];packets=[]
         def exitpoint():
             Clock.now+=40
-            if Clock.now>1800:raise KeyboardInterrupt()
+            if Clock.now>2400:raise KeyboardInterrupt()
         def locate(frame,work,*unused):
-            calls.append(work.step)
+            calls.append((work.state,work.step))
             return [{'id':1,'cx':320,'cy':240,'rect':(300,220,40,40),'pixels':500,'valid':True,'stable':False}]
         with patch.dict(sys.modules,modules),patch.object(app,'time',Clock),patch.object(app.os,'exitpoint',exitpoint,create=True),\
              patch.object(core,'VisionLink',Link),patch.object(core,'CameraMux',Camera),\
@@ -79,8 +90,16 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(Camera.modes[-1],'COLOR')
         self.assertGreater(Display.frames,len(calls))
         self.assertEqual(Display.options['to_ide'],False)
+        self.assertTrue(any(state=='WAIT_ACK' for state,step in calls))
         frames=core.FrameParser().feed(b''.join(packets))
-        self.assertTrue(any(s==11 and k=='ACK' for s,k,f in frames))
-        self.assertEqual(sum(s==12 and k=='BLOCK' for s,k,f in frames),1)
+        self.assertTrue(any(s==10 and k=='ERROR' and f==['NOT_RUNNING'] for s,k,f in frames))
+        if ack_after is not None:
+            self.assertTrue(any(s==11 and k=='ACK' for s,k,f in frames))
+            self.assertEqual(sum(s==12 and k=='BLOCK' for s,k,f in frames),1)
+            self.assertTrue(any(state=='RUN' for state,step in calls))
+        else:
+            self.assertTrue(all(state=='WAIT_ACK' and step==0 for state,step in calls))
+            self.assertGreaterEqual(sum(kind=='TASK' for now,kind in Link.events),2)
+            self.assertFalse(any(k=='BLOCK' for s,k,f in frames))
 
 if __name__=='__main__':unittest.main()

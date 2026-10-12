@@ -6,7 +6,7 @@ import json
 from zipfile import ZipFile, ZIP_DEFLATED
 ROOT=Path(__file__).resolve().parent
 SOURCE=ROOT/"K230_competition"
-PREFIX="K230_competition_20261012"
+PREFIX="K230_competition_20261012_v2"
 files=[p for p in SOURCE.rglob("*") if p.is_file() and
        "__pycache__" not in p.parts and p.suffix not in (".pyc",".o",".exe") and
        p.name not in ("good.png","SHA256SUMS.json")]

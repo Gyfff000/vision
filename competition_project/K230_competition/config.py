@@ -1,5 +1,5 @@
 # 只修改本文件，然后重新运行 tools/build_install.py 生成 install.py。
-BUILD_ID = "FLOW_20261012_V1"
+BUILD_ID = "FLOW_20261012_V2"
 QR_CAMERA = "ONBOARD"  # 将来只把此行改为 "USB"；颜色识别始终使用自带摄像头。
 UART_ENABLE = True
 UART_ID = 3

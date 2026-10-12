@@ -93,7 +93,8 @@ class Workflow:
         return self.plan[self.step] if self.raw and self.step < len(self.plan) else None
 
     def mode(self):
-        return self.current()["mode"] if self.state == "RUN" else "QR" if self.state == "SCAN" else "IDLE"
+        # Detection starts as soon as a task is known; ACK gates motion, not LCD.
+        return self.current()["mode"] if self.state in ("WAIT_ACK", "RUN") else "QR" if self.state == "SCAN" else "IDLE"
 
     def reset(self):
         self.__init__((self.session+1) & 65535)

@@ -55,7 +55,7 @@ def install(root="/sdcard"):
     print("[INSTALL_OK]",destination)
     print("[INSTALL_OK]",main)
     print("[INSTALL_CONFIG] QR_CAMERA=%s UART=%s SCALE=%s"%(QR_CAMERA,UART_ENABLE,PROCESS_SCALE))
-    print("[INSTALL_NEXT] Disconnect IDE and power-cycle. Expect [FLOW_BUILD] FLOW_20261012_V1.")
+    print("[INSTALL_NEXT] Disconnect IDE and power-cycle. Expect [FLOW_BUILD] FLOW_20261012_V2.")
 
 if __name__ == "__main__":
     if "k230" not in str(os.uname()).lower():
