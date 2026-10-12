@@ -1,0 +1,5 @@
+# PC serial test only:
+pyserial
+# Optional plane calibration tool:
+numpy
+opencv-python-headless

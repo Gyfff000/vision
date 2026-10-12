@@ -1,0 +1,63 @@
+
+def exists(path):
+    try:
+        os.stat(path)
+        return True
+    except OSError:
+        return False
+
+def checked_write(path, source):
+    data = source.encode("utf-8")
+    with open(path,"wb") as output:
+        output.write(data)
+    with open(path,"rb") as stored:
+        if stored.read() != data:
+            raise OSError("VERIFY_FAILED:"+path)
+
+def install(root="/sdcard"):
+    if not exists(root):
+        raise OSError("SD_CARD_NOT_FOUND")
+    releases = root+"/vision_releases"
+    backups = root+"/vision_backup"
+    for directory in (releases,backups):
+        if not exists(directory): os.mkdir(directory)
+    number = 1
+    while exists(releases+"/flow_%03d"%number): number += 1
+    destination = releases+"/flow_%03d"%number
+    os.mkdir(destination)
+    for name,source in FILES.items():
+        if name == "config.py":
+            source += "\n# Overrides from install.py settings.\n"
+            for key in CONFIG_KEYS:
+                source += key+" = "+repr(globals()[key])+"\n"
+        checked_write(destination+"/"+name,source)
+    launcher = LAUNCHER.replace('APP_DIR = "/sdcard/vision_current"', 'APP_DIR = '+repr(destination))
+    temporary = root+"/main.py.vision_tmp"
+    checked_write(temporary,launcher)
+    if hasattr(os,"sync"): os.sync()
+    main = root+"/main.py"
+    backup = None
+    if exists(main):
+        count = 1
+        backup=backups+"/main.py.flow_%03d.bak"%count
+        while exists(backup):
+            count+=1
+            backup=backups+"/main.py.flow_%03d.bak"%count
+        os.rename(main,backup)
+    try:
+        os.rename(temporary,main)
+    except Exception:
+        if backup is not None and not exists(main): os.rename(backup,main)
+        raise
+    if hasattr(os,"sync"): os.sync()
+    with open(main,"rb") as check:
+        if check.read()!=launcher.encode("utf-8"): raise OSError("MAIN_VERIFY_FAILED")
+    print("[INSTALL_OK]",destination)
+    print("[INSTALL_OK]",main)
+    print("[INSTALL_CONFIG] QR_CAMERA=%s UART=%s SCALE=%s"%(QR_CAMERA,UART_ENABLE,PROCESS_SCALE))
+    print("[INSTALL_NEXT] Disconnect IDE and power-cycle. Expect [FLOW_BUILD] FLOW_20261012_V1.")
+
+if __name__ == "__main__":
+    if "k230" not in str(os.uname()).lower():
+        raise RuntimeError("Run this file on K230 in CanMV IDE")
+    install()
