@@ -7,6 +7,7 @@ import sys
 import time
 import gc
 
+BUILD_ID = "SIX_COLOR_FAST_20261015"
 MODE = "COLOR"                 # COLOR, RING, ARUCO, QR, HSV_SAMPLE, SELF_TEST
 QR_CAMERA = "ONBOARD"          # ONBOARD now; USB after UVC hardware validation
 UART_ENABLE = True
@@ -15,13 +16,19 @@ UART_TX_PIN = 32                # GPIO32: physical header position 5 (TX)
 UART_RX_PIN = 33                # GPIO33: physical header position 3 (RX)
 UART_BAUD = 115200              # 8 data bits, no parity, 1 stop bit
 WIDTH, HEIGHT = 640, 480
-PROCESS_SCALE = 0.5             # 320x240 processing; output coordinates stay 640x480
+IDE_PREVIEW = False            # LCD stays on. True also streams to IDE, at extra cost.
+PROCESS_SCALE = 0.25            # 160x120 color masks; output coordinates stay 640x480
+GEOMETRY_SCALE = 0.5            # Preserve ring/ArUco resolution independently of color.
+DETECT_PERIOD_MS = 100          # Delay between detections; display refreshes in between.
+QR_SCAN_PERIOD_MS = 150
+MAX_RESULT_AGE_MS = 600         # Cached boxes are display-only, never UART measurements.
+GC_INTERVAL_MS = 1000
 DETECT_ROI = None # Search inside work area, in full 640x480 coordinates
-EDGE_MARGIN = 3                # Reject blobs clipped at processing ROI boundary
+EDGE_MARGIN = 2                # Reject blobs clipped at processing ROI boundary
 ACTIVE_COLOR_IDS = (1, 2, 3, 4, 5, 6)
 SAMPLE_COLOR_ID = 1
-PRINT_INTERVAL_MS = 500
-MIN_PIXELS = 125                # At processing resolution, not full resolution
+PRINT_INTERVAL_MS = 1000
+MIN_PIXELS = 32                 # Rescaled from 125 pixels at PROCESS_SCALE=0.5
 MAX_AREA_FRACTION = 0.45
 MIN_DENSITY = 0.25
 MIN_ASPECT, MAX_ASPECT = 0.25, 4.0
@@ -227,7 +234,7 @@ def quad_point(corners, u, v):
 
 def detect_marker(frame):
     # No AprilTag substitution: this matcher uses the actual ArUco 4x4_50 dictionary.
-    gray = frame.copy(x_scale=PROCESS_SCALE, y_scale=PROCESS_SCALE).to_grayscale()
+    gray = frame.copy(x_scale=GEOMETRY_SCALE, y_scale=GEOMETRY_SCALE).to_grayscale()
     rects = sorted(gray.find_rects(threshold=10000), key=lambda r: r.w() * r.h(), reverse=True)
     for rectangle in rects[:12]:
         if rectangle.w() * rectangle.h() < MARKER_MIN_AREA:
@@ -312,7 +319,7 @@ def plane_point(cx, cy):
 
 
 def detect_rings(frame):
-    gray = frame.copy(x_scale=PROCESS_SCALE, y_scale=PROCESS_SCALE).to_grayscale()
+    gray = frame.copy(x_scale=GEOMETRY_SCALE, y_scale=GEOMETRY_SCALE).to_grayscale()
     circles = sorted(gray.find_circles(threshold=RING_THRESHOLD, x_margin=10, y_margin=10,
                      r_margin=10, r_min=RING_MIN_RADIUS, r_max=RING_MAX_RADIUS, r_step=2),
                      key=lambda circle: circle.magnitude(), reverse=True)
@@ -566,12 +573,14 @@ def main():
         if MODE not in ("COLOR", "RING", "ARUCO", "QR", "HSV_SAMPLE", "IDLE") or QR_CAMERA not in ("ONBOARD", "USB"):
             raise ValueError("Unknown MODE")
         print("[GX_START] mode=%s board=%s" % (MODE, os.uname()))
-        print("[GX_BUILD] SIX_COLOR_UART3_V2 colors=%s" % (ACTIVE_COLOR_IDS,))
+        print("[GX_BUILD] %s colors=%s" % (BUILD_ID, ACTIVE_COLOR_IDS))
         print("[GX_INFO] six-color HSV seeds; UART=%d; QR_CAMERA=%s" % (UART_ENABLE, QR_CAMERA))
+        if not 0 < PROCESS_SCALE <= 1 or DETECT_PERIOD_MS < 0 or QR_SCAN_PERIOD_MS < 0:
+            raise ValueError("Invalid frame settings")
+        Display.init(Display.ST7701, width=WIDTH, height=HEIGHT, to_ide=IDE_PREVIEW)
+        display_ready = True
         link = VisionLink()
         camera = CameraMux(Sensor)
-        Display.init(Display.ST7701, width=WIDTH, height=HEIGHT, to_ide=True)
-        display_ready = True
         MediaManager.init()
         media_ready = True
         runtime_mode = MODE
@@ -579,7 +588,13 @@ def main():
         active_profile = "DEFAULT"
         tracker = StableTracker()
         last_print = time.ticks_ms()
-        frames = 0
+        last_gc = last_print
+        last_detect = None
+        frames = detections = 0
+        fps = detect_fps = 0.0
+        capture_ms = detect_ms = draw_ms = 0
+        records, marker = [], None
+        sample_text = payload = None
         qr_previous = None
         qr_streak = 0
         previous_good = False
@@ -603,6 +618,9 @@ def main():
                     if new_mode != runtime_mode or profile != active_profile:
                         tracker = StableTracker()
                         qr_streak, qr_previous, previous_good = 0, None, False
+                        records, marker = [], None
+                        sample_text = payload = None
+                        last_detect = None
                     PLANE_H, PLANE_ROI = CALIBRATIONS[profile] if args else default_plane
                     active_profile = profile
                     runtime_mode = new_mode
@@ -619,41 +637,43 @@ def main():
                 continue
             now = time.ticks_ms()
             report = time.ticks_diff(now, last_print) >= PRINT_INTERVAL_MS
-            records, marker, codes = [], None, []
-            payload = None
-            sample_text = None
+            codes = []
             try:
+                stamp = time.ticks_ms()
                 frame = camera.snapshot(runtime_mode)
-                if runtime_mode == "COLOR":
-                    records = detect_colors(frame, np, image)
-                    tracker.update(records)
-                elif runtime_mode == "RING":
-                    records = detect_rings(frame)
-                    # Only mapped stations have persistent identities for tracking.
-                    tracker.update([r for r in records if r["slot"] != 0])
-                elif runtime_mode == "ARUCO":
-                    marker = detect_marker(frame)
-                elif runtime_mode == "QR":
-                    codes = frame.find_qrcodes()
-                    payload = codes[0].payload() if len(codes) == 1 else None
-                    qr_streak = qr_streak + 1 if payload is not None and payload == qr_previous else 1 if payload else 0
-                    qr_previous = payload
-                    if payload == "Good" and qr_streak >= 3 and not previous_good:
-                        print("Good")
-                    previous_good = payload == "Good" and qr_streak >= 3
-                    if report and payload:
-                        print("[GX_QR] payload=%s valid=%d confirmed=%d" %
-                              (payload, valid_task(payload), qr_streak >= 3))
-                else:
-                    rgb = frame.copy(roi=(300, 220, 40, 40)).to_rgb888()
-                    h, s, v = rgb_to_hsv(rgb.to_numpy_ref(), np)
-                    # Unwrap red hue around zero before taking the median.
-                    if SAMPLE_COLOR_ID == 1:
-                        h = np.where(h > 90, h - 180, h)
-                    hue = float(np.median(h)) % 180
-                    sample_text = "HSV %.0f %.0f %.0f" % (hue, np.median(s), np.median(v))
-                    if report:
-                        print("[GX_HSV_SAMPLE] known_id=%d %s" % (SAMPLE_COLOR_ID, sample_text))
+                capture_ms = time.ticks_diff(time.ticks_ms(), stamp)
+                stamp = time.ticks_ms()
+                period = QR_SCAN_PERIOD_MS if runtime_mode == "QR" else DETECT_PERIOD_MS
+                # UART always forces detection on this new, undrawn camera frame.
+                if pending is not None or last_detect is None or time.ticks_diff(stamp, last_detect) >= period:
+                    records, marker = [], None
+                    sample_text = payload = None
+                    if runtime_mode == "COLOR":
+                        records = detect_colors(frame, np, image)
+                        tracker.update(records)
+                    elif runtime_mode == "RING":
+                        records = detect_rings(frame)
+                        tracker.update([r for r in records if r["slot"] != 0])
+                    elif runtime_mode == "ARUCO":
+                        marker = detect_marker(frame)
+                    elif runtime_mode == "QR":
+                        codes = frame.find_qrcodes()
+                        payload = codes[0].payload() if len(codes) == 1 else None
+                        qr_streak = qr_streak + 1 if payload is not None and payload == qr_previous else 1 if payload else 0
+                        qr_previous = payload
+                        if payload == "Good" and qr_streak >= 3 and not previous_good:
+                            print("Good")
+                        previous_good = payload == "Good" and qr_streak >= 3
+                    else:
+                        rgb = frame.copy(roi=(300, 220, 40, 40)).to_rgb888()
+                        h, s, v = rgb_to_hsv(rgb.to_numpy_ref(), np)
+                        if SAMPLE_COLOR_ID == 1:
+                            h = np.where(h > 90, h - 180, h)
+                        hue = float(np.median(h)) % 180
+                        sample_text = "HSV %.0f %.0f %.0f" % (hue, np.median(s), np.median(v))
+                    last_detect = time.ticks_ms()
+                    detect_ms = time.ticks_diff(last_detect, stamp)
+                    detections += 1
                 if pending is not None:
                     for data in result_frames(pending, runtime_mode, records, marker, payload, qr_streak, time.ticks_ms()):
                         # Reuse transport for already encoded transaction frames.
@@ -670,6 +690,10 @@ def main():
                     raise
                 tracker = StableTracker()
                 qr_previous, qr_streak = None, 0
+                records, marker = [], None
+                payload = sample_text = None
+                previous_good = False
+                last_detect = None
                 print("[GX_FRAME_ERROR]", runtime_mode, exc)
                 if pending is not None:
                     link.send(pending, "ERROR", "VISION_FAILED")
@@ -677,12 +701,14 @@ def main():
                 frame = image.Image(WIDTH, HEIGHT, image.RGB565)
                 frame.draw_string_advanced(0, 50, 24, "VISION ERROR: %s" % str(exc)[:60], color=(255, 80, 80))
                 Display.show_image(frame)
-                time.sleep_ms(500)
+                time.sleep_ms(20)
                 continue
             # All measurements above; drawing below cannot contaminate masks.
+            stamp = time.ticks_ms()
+            fresh_display = last_detect is not None and time.ticks_diff(stamp, last_detect) <= MAX_RESULT_AGE_MS
             if runtime_mode == "COLOR" and DETECT_ROI:
                 frame.draw_rectangle(DETECT_ROI, color=(180,180,180), thickness=1)
-            for record in records:
+            for record in records if fresh_display else ():
                 color = DRAW_COLORS[record["id"]] if runtime_mode == "COLOR" else (0,255,0)
                 frame.draw_rectangle(record["rect"], color=color, thickness=2)
                 frame.draw_cross(record["cx"], record["cy"], color=color, thickness=2)
@@ -693,7 +719,7 @@ def main():
                           (record["id"], label, record["cx"], record["cy"],
                            record["cx"] - WIDTH // 2, record["cy"] - HEIGHT // 2, record["pos"],
                            record["pixels"], record["valid"], record["stable"]))
-            if marker:
+            if marker and fresh_display:
                 corners = marker["corners"]
                 for i in range(4):
                     frame.draw_line(corners[i][0], corners[i][1], corners[(i + 1) % 4][0],
@@ -706,18 +732,30 @@ def main():
             if runtime_mode == "HSV_SAMPLE":
                 frame.draw_rectangle((300, 220, 40, 40), color=(255, 255, 255), thickness=2)
             frame.draw_string_advanced(0, 0, 24, "GX %s %s" % (runtime_mode, sample_text or ""), color=(255, 255, 255))
+            frame.draw_string_advanced(0, 26, 20, "FPS %.1f DET %.1f" % (fps, detect_fps), color=(255, 255, 0))
             Display.show_image(frame)
+            draw_ms = time.ticks_diff(time.ticks_ms(), stamp)
             frames += 1
             if report:
                 elapsed = time.ticks_diff(time.ticks_ms(), last_print)
-                if runtime_mode in ("COLOR", "RING") and not records:
+                if runtime_mode in ("COLOR", "RING") and (not records or not fresh_display):
                     print("[GX_NO_TARGET] count=0")
                 if runtime_mode == "ARUCO" and marker is None:
                     print("[GX_NO_MARKER] id=%d" % MARKER_ID)
-                print("[GX_STATUS] mode=%s fps=%.2f" % (runtime_mode, frames * 1000 / max(1, elapsed)))
+                if runtime_mode == "QR" and payload is not None and fresh_display:
+                    print("[GX_QR] payload=%s valid=%d confirmed=%d" % (payload, valid_task(payload), qr_streak >= 3))
+                if runtime_mode == "HSV_SAMPLE" and sample_text and fresh_display:
+                    print("[GX_HSV_SAMPLE] known_id=%d %s" % (SAMPLE_COLOR_ID, sample_text))
+                fps = frames * 1000 / max(1, elapsed)
+                detect_fps = detections * 1000 / max(1, elapsed)
+                print("[GX_STATUS] mode=%s fps=%.2f detect_fps=%.2f capture_ms=%d detect_ms=%d draw_ms=%d" %
+                      (runtime_mode, fps, detect_fps, capture_ms, detect_ms, draw_ms))
                 last_print = time.ticks_ms()
-                frames = 0
-            gc.collect()
+                frames = detections = 0
+            stamp = time.ticks_ms()
+            if time.ticks_diff(stamp, last_gc) >= GC_INTERVAL_MS:
+                gc.collect()
+                last_gc = stamp
     except KeyboardInterrupt:
         print("[GX_STOP]")
     except Exception as exc:
