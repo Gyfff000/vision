@@ -161,3 +161,9 @@
 ## 2026-10-15 USB摄像头纯画面测试
 
 按用户澄清，新增examples/k230_usb_camera_test.py：仅探测USB摄像头、选择640×480 MJPEG、软件转RGB565并显示LCD与IDE，不扫码、不识别颜色、不启用自带摄像头或UART、不修改自启动。兼容FORMAT_MJPEG和FOURCC_MJPEG常量，10秒探测超时、帧接收状态/FPS及资源清理。依据官方CanMV v1.6与开发分支UVC文档整理；语法检查和无设备/成功预览/启动失败三个模拟场景通过，已保存D:/K230_pro固定路径。未在用户板端实测。亚博本板USB Host可用性、线缆接法及安装固件UVC支持仍未确认；读取失败不能单独判定摄像头损坏。
+
+## 2026-10-16 电脑自动打开独立USB摄像头
+
+用户最终明确仅需在电脑验证独立USB摄像头，并要求免手动切换。新增tools/usb_camera_preview_pc.py及中文启动器，使用pygrabber枚举DirectShow名称并以相同后端打开唯一FHD Camera；不存在/重名报错，不默认使用内置摄像头。不保存图像，不依赖K230。依赖安装在本工作区camera_deps，并交付D:/K230_pro/USB_camera_PC。
+
+实际采集验证成功：0=Integrated Webcam、1=FHD Camera，自动选择1并收到连续三帧640×480图像。此前Windows设备状态OK仅代表枚举成功，本次补充实际视频帧证据。长时间稳定性与K230接入仍未验证。
