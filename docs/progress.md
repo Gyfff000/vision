@@ -167,3 +167,9 @@
 用户最终明确仅需在电脑验证独立USB摄像头，并要求免手动切换。新增tools/usb_camera_preview_pc.py及中文启动器，使用pygrabber枚举DirectShow名称并以相同后端打开唯一FHD Camera；不存在/重名报错，不默认使用内置摄像头。不保存图像，不依赖K230。依赖安装在本工作区camera_deps，并交付D:/K230_pro/USB_camera_PC。
 
 实际采集验证成功：0=Integrated Webcam、1=FHD Camera，自动选择1并收到连续三帧640×480图像。此前Windows设备状态OK仅代表枚举成功，本次补充实际视频帧证据。长时间稳定性与K230接入仍未验证。
+
+## 2026-10-17 电脑预览增加摄像头切换
+
+用户截图显示设备枚举顺序已变为0=FHD Camera、1=Integrated Webcam，程序按名称仍正确选择外接设备；用户在程序退出后的PowerShell提示符下输入1，原程序没有交互式切换功能。现增加预览顶部可点击的设备按钮，画面窗口内C/Tab循环切换、0/1按本次设备列表选择、R重试，保持默认按名称自动打开FHD Camera。切换前释放旧采集句柄；设备占用/读帧超时保留窗口和选择器，避免退出后误以为终端数字仍能控制摄像头。启动器转发命令行参数，支持直接指定Integrated Webcam。
+
+4项桌面检查覆盖编号顺序改变、C切换释放顺序、鼠标选择和打开失败后切回；实际分别读取FHD Camera与Integrated Webcam各三帧640×480图像成功。版本PC_CAMERA_SWITCH_20261017，更新D:/K230_pro/USB_camera_PC并备份原脚本和启动器。持续交互预览及长期稳定性由用户验证。
