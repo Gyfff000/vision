@@ -60,5 +60,20 @@ class PreviewTests(unittest.TestCase):
         self.assertEqual([event for event in events if event[0]=="open"],[("open",0),("open",1),("open",0)])
         self.assertEqual(sum(event[0]=="display" for event in events),3)
 
+    def test_mjpeg_survives_driver_format_reset_during_resolution_fps_settings(self):
+        # Model the measured DirectShow behavior: changing FPS resets format to YUY2.
+        class Capture:
+            codec = None
+            def isOpened(self): return True
+            def set(self, prop, value):
+                self.codec = value if prop == cv2.CAP_PROP_FOURCC else cv2.VideoWriter_fourcc(*"YUY2")
+                return True
+            def release(self): pass
+        class CV:
+            def __getattr__(self,name): return getattr(cv2,name)
+            def VideoCapture(self,*args): return Capture()
+        capture = app.open_camera(CV(), 0)
+        self.assertEqual(capture.codec, cv2.VideoWriter_fourcc(*"MJPG"))
+
 
 if __name__=="__main__": unittest.main()

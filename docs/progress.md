@@ -173,3 +173,11 @@
 用户截图显示设备枚举顺序已变为0=FHD Camera、1=Integrated Webcam，程序按名称仍正确选择外接设备；用户在程序退出后的PowerShell提示符下输入1，原程序没有交互式切换功能。现增加预览顶部可点击的设备按钮，画面窗口内C/Tab循环切换、0/1按本次设备列表选择、R重试，保持默认按名称自动打开FHD Camera。切换前释放旧采集句柄；设备占用/读帧超时保留窗口和选择器，避免退出后误以为终端数字仍能控制摄像头。启动器转发命令行参数，支持直接指定Integrated Webcam。
 
 4项桌面检查覆盖编号顺序改变、C切换释放顺序、鼠标选择和打开失败后切回；实际分别读取FHD Camera与Integrated Webcam各三帧640×480图像成功。版本PC_CAMERA_SWITCH_20261017，更新D:/K230_pro/USB_camera_PC并备份原脚本和启动器。持续交互预览及长期稳定性由用户验证。
+
+## 2026-10-17 第二台电脑摄像头提速
+
+按列表第二台Integrated Webcam排查，已实测支持640×480 MJPG约30fps，YUY2约15fps。旧open_camera顺序为先FOURCC再尺寸/FPS，最终get(FOURCC)却是YUY2，驱动get(FPS)仍报告30；实际连续采集约14.93fps。改为先尺寸/FPS、最后FOURCC后，实际协商MJPG，3秒采样约29.92fps；FHD Camera同样约29.92fps。证据说明问题出在驱动协商顺序，而非简单将请求帧率数值设大。
+
+提速版PC_CAMERA_FAST_20261017保留切换按钮、默认外接选择、错误重试与无图像落盘，GUI waitKey从10ms减为1ms，每秒输出实测PREVIEW_FPS。增加模拟驱动重置编码的回归检查，与已有切换检查共5项通过。更新D:/K230_pro/USB_camera_PC并备份旧脚本。未修改自动曝光，不承诺超过硬件支持的30fps，也未完成长期稳定性测试。
+
+继续完成中断操作后已核对交付文件SHA256与工作区一致，启动实际预览窗口，Integrated Webcam在640×480下连续多次PREVIEW_FPS约29.6–30.5，补充实际GUI显示循环达到约30fps的证据（启动预热阶段不计入稳定帧率）。

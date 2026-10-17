@@ -40,10 +40,12 @@ def open_camera(cv2, index):
     try:
         if not capture.isOpened():
             raise RuntimeError("Cannot open camera. Close Windows Camera/meeting apps; press R to retry.")
-        capture.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
         capture.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
         capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
         capture.set(cv2.CAP_PROP_FPS, 30)
+        # This camera's driver resets FOURCC when changing size/FPS. Request MJPG last:
+        # Integrated Webcam negotiates YUY2 at ~15fps otherwise, despite FPS reporting 30.
+        capture.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
         return capture
     except Exception:
         capture.release()
@@ -120,6 +122,7 @@ def run_preview(cv2, names, index, check_only=False):
                 fps = frames/(now-last_report)
                 frames = 0
                 last_report = now
+                print("[PREVIEW_FPS] %s %.1f" % (names[index], fps), flush=True)
             # Keep the selector visible even when a camera is busy or disconnected.
             picture = last_image if last_image is not None else np.zeros((480,640,3), dtype=np.uint8)
             if picture.shape[1] != 640:
@@ -138,7 +141,7 @@ def run_preview(cv2, names, index, check_only=False):
                 for line in range(0, len(status), 72):
                     cv2.putText(canvas, status[line:line+72], (10,145+25*(line//72)), cv2.FONT_HERSHEY_SIMPLEX, .45, (0,200,255), 1)
             cv2.imshow(window, canvas)
-            key = cv2.waitKey(10) & 255
+            key = cv2.waitKey(1) & 255
             if key in (27, ord("q"), ord("Q")):
                 print("[CLOSED] Preview closed by keyboard.", flush=True)
                 break
@@ -160,7 +163,7 @@ def main():
     parser.add_argument("--check-only", action="store_true")
     parser.add_argument("--list", action="store_true")
     args = parser.parse_args()
-    print("[BUILD] PC_CAMERA_SWITCH_20261017", flush=True)
+    print("[BUILD] PC_CAMERA_FAST_20261017", flush=True)
     import cv2
     from pygrabber.dshow_graph import FilterGraph
 
