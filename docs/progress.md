@@ -181,3 +181,9 @@
 提速版PC_CAMERA_FAST_20261017保留切换按钮、默认外接选择、错误重试与无图像落盘，GUI waitKey从10ms减为1ms，每秒输出实测PREVIEW_FPS。增加模拟驱动重置编码的回归检查，与已有切换检查共5项通过。更新D:/K230_pro/USB_camera_PC并备份旧脚本。未修改自动曝光，不承诺超过硬件支持的30fps，也未完成长期稳定性测试。
 
 继续完成中断操作后已核对交付文件SHA256与工作区一致，启动实际预览窗口，Integrated Webcam在640×480下连续多次PREVIEW_FPS约29.6–30.5，补充实际GUI显示循环达到约30fps的证据（启动预热阶段不计入稳定帧率）。
+
+## 2026-11-12 K230通过Type-C连接USB摄像头预览
+
+用户已将独立USB摄像头通过Type-C连接到K230，要求板端显示图像。更新examples/k230_usb_camera_test.py为USB_CAMERA_PREVIEW_20261112，沿用官方UVC MJPEG软件转RGB565路径，显示亚博LCD并预留IDE图传；不初始化自带摄像头，不扫码、不启用UART。缺少media.uvc、探测超时、协商/启动失败等错误保留到LCD，支持脱离电脑查看，不修改USB角色或固件。
+
+新增专用k230_usb_camera_install.py及构建工具，安装/sdcard/usb_camera_preview.py和main.py，备份并读回校验，解决同一Type-C无法同时连接IDE与摄像头时的离线启动。安装会切换原比赛自启动入口，已在说明中明确；不会自动部署到用户板端。程序与安装器保存D:/K230_pro。5项桌面检查通过（包含新旧UVC常量、成功取帧、缺少固件模块、无设备、模式/启动/帧超时及重复安装备份场景）。尚无本次板端USB_FRAME_OK证据，不能确认当前Type-C已具备可用USB Host或摄像头图像已读通。

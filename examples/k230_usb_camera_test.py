@@ -11,29 +11,30 @@ CAMERA_FPS = 30
 IDE_PREVIEW = True
 PROBE_TIMEOUT_MS = 10000
 FRAME_TIMEOUT_MS = 5000
+KEEP_ERROR_SCREEN = True       # Retain diagnostics on LCD during standalone tests.
 
 
 def main():
     uvc = display = manager = None
     display_ready = media_ready = uvc_ready = False
     try:
-        print("[USB_TEST] USB_CAMERA_PREVIEW_20261015")
+        print("[USB_TEST] USB_CAMERA_PREVIEW_20261112")
         print("[USB_BOARD]", os.uname())
+        from media.display import Display
+        from media.media import MediaManager
+        import image
+        display, manager = Display, MediaManager
+        display.init(display.ST7701, width=WIDTH, height=HEIGHT, to_ide=IDE_PREVIEW)
+        display_ready = True
+        manager.init()
+        media_ready = True
         try:
             from media.uvc import UVC
         except ImportError as exc:
             print("[USB_UNSUPPORTED] Firmware has no media.uvc; camera health is unknown.")
             print(exc)
-            return
-        from media.display import Display
-        from media.media import MediaManager
-        import image
-        uvc, display, manager = UVC, Display, MediaManager
-
-        display.init(display.ST7701, width=WIDTH, height=HEIGHT, to_ide=IDE_PREVIEW)
-        display_ready = True
-        manager.init()
-        media_ready = True
+            raise OSError("USB_UNSUPPORTED: firmware has no media.uvc")
+        uvc = UVC
         status = image.Image(WIDTH, HEIGHT, image.RGB565)
         status.draw_string_advanced(10, 30, 24, "USB CAMERA TEST", color=(255,255,255))
         status.draw_string_advanced(10, 80, 22, "Waiting for USB camera...", color=(255,255,0))
@@ -59,11 +60,11 @@ def main():
         if fmt is None:
             raise OSError("USB_API_UNSUPPORTED: no MJPEG format constant")
         requested = uvc.video_mode(WIDTH, HEIGHT, fmt, CAMERA_FPS)
+        uvc_ready = True  # Also clean up partial device initialization on failure.
         ok, actual = uvc.select_video_mode(requested)
         print("[USB_MODE] success=%s actual=%s" % (ok, actual))
         if not ok:
             raise OSError("USB_MODE_FAILED: try CAMERA_FPS=15 or a supported mode")
-        uvc_ready = True
         # Explicitly disable hardware NV12 decoding: MJPEG can then use to_rgb565().
         if not uvc.start(cvt=False):
             raise OSError("USB_START_FAILED")
@@ -103,9 +104,25 @@ def main():
     except KeyboardInterrupt:
         print("[USB_STOP] Stopped by user")
     except Exception as exc:
+        if "IDE interrupt" in str(exc):
+            print("[USB_STOP] IDE stopped the program")
+            return
         print("[USB_ERROR]", exc)
         print("[USB_NOTE] Failure here alone does not prove a faulty camera.")
         sys.print_exception(exc)
+        if display_ready:
+            try:
+                status = image.Image(WIDTH, HEIGHT, image.RGB565)
+                status.draw_string_advanced(10, 20, 26, "USB CAMERA ERROR", color=(255,80,80))
+                reason = str(exc)
+                status.draw_string_advanced(10, 85, 22, reason.split(":")[0][:45], color=(255,255,255))
+                status.draw_string_advanced(10, 145, 20, "Check USB Host / firmware / cable", color=(255,255,0))
+                display.show_image(status)
+                while KEEP_ERROR_SCREEN:
+                    os.exitpoint()
+                    time.sleep_ms(50)
+            except (Exception, KeyboardInterrupt):
+                pass
     finally:
         if uvc_ready:
             try: uvc.stop()
