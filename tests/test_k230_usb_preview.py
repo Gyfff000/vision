@@ -38,6 +38,7 @@ class PreviewTests(unittest.TestCase):
             def height(self): return 480
             def to_rgb565(self): return self
             def draw_string_advanced(self,*a,**kw): events.append(("text",a[3]))
+            def draw_rectangle(self,*a,**kw): events.append(("clear",kw.get("color")))
         class UVC:
             @staticmethod
             def probe(): return case != "absent", "USB Camera"
@@ -96,6 +97,8 @@ class PreviewTests(unittest.TestCase):
         output,events=self.run_board("absent")
         self.assertIn("USB_NOT_FOUND",output)
         self.assertIn(("text","USB CAMERA ERROR"),events)
+        self.assertIn(("clear",(0,0,0)),events)
+        self.assertIn(("text","USB_NOT_FOUND"),events)
         self.assertNotIn(("stop",),events)
 
     def test_missing_firmware_module_is_visible_on_lcd(self):

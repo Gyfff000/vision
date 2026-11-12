@@ -18,7 +18,7 @@ def main():
     uvc = display = manager = None
     display_ready = media_ready = uvc_ready = False
     try:
-        print("[USB_TEST] USB_CAMERA_PREVIEW_20261112")
+        print("[USB_TEST] USB_CAMERA_PREVIEW_20261112_DIAG2")
         print("[USB_BOARD]", os.uname())
         from media.display import Display
         from media.media import MediaManager
@@ -36,6 +36,7 @@ def main():
             raise OSError("USB_UNSUPPORTED: firmware has no media.uvc")
         uvc = UVC
         status = image.Image(WIDTH, HEIGHT, image.RGB565)
+        status.draw_rectangle((0, 0, WIDTH, HEIGHT), color=(0,0,0), fill=True)
         status.draw_string_advanced(10, 30, 24, "USB CAMERA TEST", color=(255,255,255))
         status.draw_string_advanced(10, 80, 22, "Waiting for USB camera...", color=(255,255,0))
         display.show_image(status)
@@ -113,10 +114,14 @@ def main():
         if display_ready:
             try:
                 status = image.Image(WIDTH, HEIGHT, image.RGB565)
+                status.draw_rectangle((0, 0, WIDTH, HEIGHT), color=(0,0,0), fill=True)
                 status.draw_string_advanced(10, 20, 26, "USB CAMERA ERROR", color=(255,80,80))
                 reason = str(exc)
-                status.draw_string_advanced(10, 85, 22, reason.split(":")[0][:45], color=(255,255,255))
-                status.draw_string_advanced(10, 145, 20, "Check USB Host / firmware / cable", color=(255,255,0))
+                status.draw_string_advanced(10, 85, 30, reason.split(":")[0][:30], color=(255,255,255))
+                for start in range(0, min(len(reason), 135), 45):
+                    status.draw_string_advanced(10, 160+30*(start//45), 20, reason[start:start+45], color=(255,255,0))
+                status.draw_string_advanced(10, 290, 20, "Please photograph this full screen", color=(255,255,255))
+                status.draw_string_advanced(10, 340, 18, "USB PREVIEW DIAG2", color=(0,255,0))
                 display.show_image(status)
                 while KEEP_ERROR_SCREEN:
                     os.exitpoint()
