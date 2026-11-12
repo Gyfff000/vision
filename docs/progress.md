@@ -195,3 +195,11 @@
 用户确认此前线缆为USB母对母接头加USB转Type-C数据线；随后提出使用USB转TTL接入K230串口。已说明普通USB串口桥（如CH340，官方定义为USB设备）不承担UVC主机/视频接收，不能把USB摄像头直接变成串口摄像头；模块确切型号待用户提供，不能据名称认定它有UVC主机功能。
 
 本次用亚博官方FPIOA教程https://www.yahboom.net/study/K230/14977/核实两路接口区别：Type-C旁四针通讯口默认UART1，TX=GPIO9、RX=GPIO10；12针排针UART3为物理5脚GPIO32/TX、物理3脚GPIO33/RX。不能把两处接口当作同一个UART。若以后开发电脑采集JPEG→USB串口桥→K230解码的桌面图传，可分开使用UART1图传、UART3连接STM32，但该图传尚未实现，且需电脑参与，不等于自主USB接入方案。现有比赛代码仍用UART3；本次未修改通信代码或板端固件。
+
+## 2026-11-12 01Studio板型重新确认
+
+用户此前已确认USB转TTL型号为CH340，普通USB设备端串口桥不能独立采集UVC视频。随后提供01studio.cc主页并表示K230来自该网站，询问能否直接连接亚博USB摄像头；该信息与先前AIMOTION2说明书照片不同，具体板型尚待确认，不据此自动更换已有亚博LCD/UART配置。
+
+核对01Studio官方产品参数：CanMV K230标准开发板、CanMV K230 mini均列有一个独立USB 2.0 HOST，并将Type-C列为IDE/供电/文件传输接口；CyberCAM也列有USB 2.0 HOST，但其软件路线与CanMV板不应混用。官方参数见https://wiki.01studio.cc/docs/canmv_k230/intro/canmv_k230/及https://wiki.01studio.cc/docs/cybercam/intro/product/。官方论坛https://forum.01studio.cc/t/topic/565有用户报告按勘智UVC文档成功采集，但不是本用户这台摄像头的实测。确认带Host的具体01Studio板及UVC固件后，可直接用摄像头USB插头连接独立Host口，不经过CH340或母对母加普通Type-C数据线；具体视频模式、LCD显示和双相机切换仍需上板验证，不能把硬件有Host等同于所有固件/摄像头即插即用。
+
+用户回答确认具体板型为CanMV K230标准开发板。按此新确认的目标板建议：亚博USB摄像头直插独立USB-A HOST，Type-C保留供电/IDE；先在该板配套CanMV固件运行UVC.probe，再验证640×480 MJPEG取帧。原有亚博AIMOTION2的LCD和UART引脚配置不能据此认定适配01Studio，未擅自覆盖原工程配置，也未宣称本次组合已实测。
